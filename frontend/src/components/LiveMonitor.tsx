@@ -55,31 +55,25 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   const [fleetUnits, setFleetUnits] = useState<any[]>([]);
 
   // Fetch unit data from SQLite API
-  const fetchUnitData = async (unitId: string) => {
+  const fetchUnitData = async (unitId: string, fetchFullHistory: boolean = false) => {
     try {
-      const [latestRes, historyRes, unitsRes] = await Promise.all([
+      const promises: Promise<Response>[] = [
         fetch(`http://localhost:8000/api/units/${unitId}/latest`),
-        fetch(`http://localhost:8000/api/units/${unitId}/history?minutes=120`),
-        fetch(`http://localhost:8000/api/units`),
-      ]);
+      ];
+      if (fetchFullHistory) {
+        promises.push(fetch(`http://localhost:8000/api/units/${unitId}/history?minutes=120`));
+      }
 
-      if (latestRes.ok) {
+      const [latestRes, historyRes] = await Promise.all(promises);
+
+      if (latestRes && latestRes.ok) {
         const latestData = await latestRes.json();
         setLatest(latestData);
-      } else {
-        setLatest(null);
       }
 
-      if (historyRes.ok) {
+      if (historyRes && historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(historyData.readings || []);
-      }
-
-      if (unitsRes.ok) {
-        const uData = await unitsRes.json();
-        if (uData.units) {
-          setFleetUnits(uData.units);
-        }
       }
     } catch (err) {
       console.error('Failed to fetch unit data:', err);
@@ -88,15 +82,35 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
     }
   };
 
+  const fetchFleetSummary = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/units');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.units) setFleetUnits(data.units);
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
-    fetchUnitData(selectedUnit);
+    fetchUnitData(selectedUnit, true);
+    fetchFleetSummary();
 
-    const interval = setInterval(() => {
-      fetchUnitData(selectedUnit);
-    }, 2000);
+    const unitInterval = setInterval(() => {
+      fetchUnitData(selectedUnit, false);
+    }, 3000);
 
-    return () => clearInterval(interval);
+    const fleetInterval = setInterval(() => {
+      fetchFleetSummary();
+    }, 5000);
+
+    return () => {
+      clearInterval(unitInterval);
+      clearInterval(fleetInterval);
+    };
   }, [selectedUnit]);
 
   // WebSocket Live Listener

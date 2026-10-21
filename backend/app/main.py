@@ -5,15 +5,19 @@ Exposes WebSocket and REST ingestion, live broadcast, and query endpoints.
 
 import json
 import re
+import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Optional
 import pandas as pd
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+# Suppress noisy library warnings in fast loops
+warnings.filterwarnings("ignore", category=UserWarning)
 
 from backend.app.config import DATA_DIR, MODELS_DIR
 from backend.app.db import (
@@ -226,16 +230,30 @@ UNIT_METADATA = {
 def api_get_units():
     units = get_all_units_summary()
     enriched = []
+    priority = ["U1", "U2", "U3", "U4", "U5"]
+    
     for u in units:
         u_dict = dict(u)
-        meta = UNIT_METADATA.get(u_dict["unit_id"], {
-            "payload": f"Medical Biologicals (Unit {u_dict['unit_id']})",
+        uid = u_dict["unit_id"]
+        # Exclude legacy simulator bulk IDs (U01..U09) so only clinical U1-U5 and uploads appear
+        if uid.startswith("U0") and len(uid) == 3:
+            continue
+        meta = UNIT_METADATA.get(uid, {
+            "payload": f"Medical Biologicals (Unit {uid})",
             "location": "Hospital Central Reserve Bay",
             "battery_pct": 95,
             "setpoint_c": "4.0°C",
         })
         u_dict.update(meta)
         enriched.append(u_dict)
+
+    def sort_key(item):
+        uid = item["unit_id"]
+        if uid in priority:
+            return (0, priority.index(uid))
+        return (1, uid)
+
+    enriched.sort(key=sort_key)
     return {"units": enriched}
 
 
@@ -298,17 +316,24 @@ def api_get_unit_history(unit_id: str, minutes: int = Query(default=120, ge=1, l
 
 
 # 7. Evaluation Results
+_EVAL_CACHE: Optional[Dict[str, Any]] = None
+
 @app.get("/api/eval")
 def api_get_evaluation():
+    global _EVAL_CACHE
+    if _EVAL_CACHE is not None:
+        return _EVAL_CACHE
     eval_file = MODELS_DIR / "eval_results.json"
     if not eval_file.exists():
         raise HTTPException(status_code=404, detail="Evaluation results not yet generated.")
     with open(eval_file, "r") as f:
-        data = json.load(f)
-    return data
+        _EVAL_CACHE = json.load(f)
+    return _EVAL_CACHE
 
 
 # 8. Recovery vs Failure Scenarios
+_SCENARIOS_CACHE: Optional[Dict[str, Any]] = None
+
 @app.get("/api/scenarios")
 def api_get_scenarios():
     """
@@ -316,6 +341,10 @@ def api_get_scenarios():
     - Door-Open Recovery (stays Low risk)
     - Compressor Failure (rises to High risk excursion)
     """
+    global _SCENARIOS_CACHE
+    if _SCENARIOS_CACHE is not None:
+        return _SCENARIOS_CACHE
+
     train_file = DATA_DIR / "sim_train.csv"
     if not train_file.exists():
         raise HTTPException(status_code=404, detail="Simulator dataset not available.")
@@ -363,7 +392,7 @@ def api_get_scenarios():
             })
         return out
 
-    return {
+    _SCENARIOS_CACHE = {
         "door_open_recovery": {
             "title": "Harmless Door-Open (Recovers to Low Risk)",
             "description": "Door opened for 2-3 minutes. Compressor kicks in, temperature quickly returns to safe 2-8°C band.",
@@ -375,6 +404,7 @@ def api_get_scenarios():
             "data": score_trace(fail_df, 60),
         },
     }
+    return _SCENARIOS_CACHE
 
 
 # 9. Interactive Demo Control Endpoints
