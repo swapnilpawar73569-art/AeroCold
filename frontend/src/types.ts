@@ -91,3 +91,49 @@ export interface ScenariosResponse {
   door_open_recovery: ScenarioTrace;
   compressor_failure: ScenarioTrace;
 }
+
+export interface InterventionPoint {
+  minute: number;
+  temp: number;
+  is_breach?: boolean;
+  is_safe?: boolean;
+}
+
+export interface InterventionResult {
+  unit_id: string;
+  action_type: string;
+  action_name: string;
+  protocol_description: string;
+  initial_temp: number;
+  payload: string;
+  cargo_value_usd: number;
+  time_to_breach_status_quo_min: number | null;
+  time_saved_minutes: number;
+  shelf_life_impact: string;
+  counterfactual_status_quo: InterventionPoint[];
+  counterfactual_mitigated: InterventionPoint[];
+  regulatory_compliance: string;
+  certificate_id: string;
+  timestamp: number;
+}
+
+export interface DatasetSample {
+  id: string;
+  title: string;
+  description: string;
+  target_unit: string;
+  content: string;
+}
+
+export interface DatasetUploadResult {
+  status: string;
+  rows_processed: number;
+  units_affected: string[];
+  metrics: {
+    high_risk_alerts: number;
+    medium_warning_alerts: number;
+    normal_readings: number;
+  };
+  sample_readings: Reading[];
+}
+

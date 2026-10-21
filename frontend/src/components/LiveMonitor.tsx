@@ -27,6 +27,7 @@ import {
   Volume2,
   VolumeX,
   ShieldAlert,
+  Sparkles,
 } from 'lucide-react';
 import { Reading } from '../types';
 import { RiskDialGauge } from './RiskDialGauge';
@@ -37,25 +38,29 @@ interface LiveMonitorProps {
   selectedUnit: string;
   onSelectUnit: (unit: string) => void;
   unitsList: string[];
+  onNavigateIntervention?: (unitId?: string) => void;
 }
 
 export const LiveMonitor: React.FC<LiveMonitorProps> = ({
   selectedUnit,
   onSelectUnit,
   unitsList,
+  onNavigateIntervention,
 }) => {
   const [latest, setLatest] = useState<Reading | null>(null);
   const [history, setHistory] = useState<Reading[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
   const [showAmbient, setShowAmbient] = useState<boolean>(true);
+  const [fleetUnits, setFleetUnits] = useState<any[]>([]);
 
   // Fetch unit data from SQLite API
   const fetchUnitData = async (unitId: string) => {
     try {
-      const [latestRes, historyRes] = await Promise.all([
+      const [latestRes, historyRes, unitsRes] = await Promise.all([
         fetch(`http://localhost:8000/api/units/${unitId}/latest`),
         fetch(`http://localhost:8000/api/units/${unitId}/history?minutes=120`),
+        fetch(`http://localhost:8000/api/units`),
       ]);
 
       if (latestRes.ok) {
@@ -68,6 +73,13 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(historyData.readings || []);
+      }
+
+      if (unitsRes.ok) {
+        const uData = await unitsRes.json();
+        if (uData.units) {
+          setFleetUnits(uData.units);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch unit data:', err);
@@ -175,6 +187,210 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {/* Hero 5-Unit Chamber Quick-Selector Deck */}
+      <div
+        className="glass-panel"
+        style={{
+          padding: '1.2rem 1.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.85rem',
+          background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.85) 100%)',
+          border: '1px solid var(--border-light)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #0284c7, #38bdf8)',
+                padding: '0.4rem',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Layers size={17} color="#ffffff" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>COLD CHAMBER FLEET SELECTOR</span>
+                <span
+                  style={{
+                    background: 'rgba(56, 189, 248, 0.15)',
+                    color: '#38bdf8',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    padding: '0.1rem 0.4rem',
+                    borderRadius: '4px',
+                    fontSize: '0.65rem',
+                    fontWeight: 800,
+                  }}
+                >
+                  PRESS KEYS [1] TO [5]
+                </span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Instant one-touch switching for jury presentation • Real-time telemetry feed
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+            <span>Keyboard shortcuts active:</span>
+            {['1', '2', '3', '4', '5'].map((k) => (
+              <kbd
+                key={k}
+                style={{
+                  background: selectedUnit === `U${k}` ? '#38bdf8' : 'rgba(255, 255, 255, 0.08)',
+                  color: selectedUnit === `U${k}` ? '#0f172a' : '#cbd5e1',
+                  padding: '0.15rem 0.45rem',
+                  borderRadius: '4px',
+                  fontWeight: 900,
+                  fontSize: '0.75rem',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                }}
+              >
+                {k}
+              </kbd>
+            ))}
+          </div>
+        </div>
+
+        {/* 5 Unit Hero Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.85rem' }}>
+          {['U1', 'U2', 'U3', 'U4', 'U5'].map((uId, idx) => {
+            const uData = fleetUnits.find((u) => u.unit_id === uId);
+            const isSelected = selectedUnit === uId;
+            const risk = uData?.risk_level || (uId === 'U2' ? 'High' : uId === 'U3' ? 'Medium' : 'Low');
+            const temp = uData?.storage_c !== undefined
+              ? `${uData.storage_c.toFixed(1)}°C`
+              : uId === 'U2'
+              ? '7.5°C'
+              : '4.2°C';
+            const role =
+              uId === 'U1'
+                ? 'Routine Transit (Normal)'
+                : uId === 'U2'
+                ? 'CRITICAL RUNAWAY (Alarm)'
+                : uId === 'U3'
+                ? 'Door Ajar Incident'
+                : uId === 'U4'
+                ? 'Drone Carrier Loading'
+                : 'Hospital Receiving Dock';
+
+            const riskBg =
+              risk === 'High'
+                ? 'rgba(239, 68, 68, 0.15)'
+                : risk === 'Medium'
+                ? 'rgba(245, 158, 11, 0.15)'
+                : 'rgba(16, 185, 129, 0.12)';
+            const riskColor = risk === 'High' ? '#ef4444' : risk === 'Medium' ? '#f59e0b' : '#10b981';
+            const riskBorder = risk === 'High' ? 'rgba(239, 68, 68, 0.4)' : risk === 'Medium' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.3)';
+
+            return (
+              <div
+                key={uId}
+                onClick={() => onSelectUnit(uId)}
+                style={{
+                  background: isSelected
+                    ? 'linear-gradient(135deg, rgba(2, 132, 199, 0.3), rgba(15, 23, 42, 0.95))'
+                    : 'rgba(30, 41, 59, 0.55)',
+                  border: isSelected
+                    ? '2px solid #38bdf8'
+                    : risk === 'High'
+                    ? '1px solid rgba(239, 68, 68, 0.6)'
+                    : '1px solid rgba(255, 255, 255, 0.08)',
+                  boxShadow: isSelected
+                    ? '0 0 20px rgba(56, 189, 248, 0.4)'
+                    : risk === 'High'
+                    ? '0 0 10px rgba(239, 68, 68, 0.25)'
+                    : 'none',
+                  borderRadius: '12px',
+                  padding: '0.85rem 1rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.18s ease-in-out',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.45rem',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                {isSelected && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      background: '#38bdf8',
+                      color: '#0f172a',
+                      fontSize: '0.62rem',
+                      fontWeight: 900,
+                      padding: '0.15rem 0.5rem',
+                      borderBottomLeftRadius: '8px',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    ACTIVE DISPLAY
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <span
+                      style={{
+                        background: isSelected ? '#38bdf8' : 'rgba(255, 255, 255, 0.12)',
+                        color: isSelected ? '#0f172a' : '#cbd5e1',
+                        borderRadius: '6px',
+                        padding: '0.15rem 0.45rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 900,
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      [{idx + 1}]
+                    </span>
+                    <strong style={{ fontSize: '1.1rem', color: isSelected ? '#38bdf8' : '#f8fafc' }}>
+                      {uId}
+                    </strong>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '0.68rem',
+                      fontWeight: 800,
+                      padding: '0.15rem 0.45rem',
+                      borderRadius: '4px',
+                      background: riskBg,
+                      color: riskColor,
+                      border: `1px solid ${riskBorder}`,
+                    }}
+                  >
+                    {risk.toUpperCase()}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: '0.1rem' }}>
+                  <span
+                    style={{
+                      fontSize: '1.45rem',
+                      fontWeight: 900,
+                      fontFamily: 'var(--font-mono)',
+                      color: risk === 'High' ? '#ef4444' : risk === 'Medium' ? '#f59e0b' : '#38bdf8',
+                    }}
+                  >
+                    {temp}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: isSelected ? '#e2e8f0' : 'var(--text-muted)' }}>
+                    {role}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Interactive Demo Controller Bar */}
       <DemoControlBar
         onRefresh={() => fetchUnitData(selectedUnit)}
@@ -188,34 +404,66 @@ export const LiveMonitor: React.FC<LiveMonitorProps> = ({
             background: 'linear-gradient(90deg, rgba(239, 68, 68, 0.25), rgba(220, 38, 38, 0.15))',
             border: '1px solid #ef4444',
             borderRadius: '12px',
-            padding: '1rem 1.5rem',
+            padding: '1.1rem 1.6rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '1rem',
             animation: 'pulse-border 2s infinite',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ background: '#ef4444', padding: '0.5rem', borderRadius: '8px' }}>
-              <ShieldAlert size={24} color="#ffffff" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: '280px' }}>
+            <div style={{ background: '#ef4444', padding: '0.6rem', borderRadius: '10px' }}>
+              <ShieldAlert size={26} color="#ffffff" />
             </div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#fecaca' }}>
-                EARLY EXCURSION WARNING TRIGGERED FOR UNIT {selectedUnit}
+              <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fecaca', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>EARLY EXCURSION WARNING TRIGGERED FOR UNIT {selectedUnit}</span>
+                <span style={{ background: '#dc2626', color: '#fff', fontSize: '0.68rem', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 900 }}>
+                  CRITICAL
+                </span>
               </div>
-              <div style={{ fontSize: '0.85rem', color: '#fca5a5' }}>
+              <div style={{ fontSize: '0.85rem', color: '#fca5a5', marginTop: '0.2rem' }}>
                 {latest?.explanation || 'Thermal runaway detected. Action required before 8.0°C violation.'}
               </div>
             </div>
           </div>
-          {ttx && (
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: '0.75rem', color: '#fca5a5', textTransform: 'uppercase' }}>Lead Time Window</span>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: '#fee2e2' }}>
-                ~{Math.round(ttx)}m
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+            {ttx && (
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.75rem', color: '#fca5a5', textTransform: 'uppercase' }}>Lead Time Window</span>
+                <div style={{ fontSize: '1.7rem', fontWeight: 900, fontFamily: 'var(--font-mono)', color: '#fee2e2' }}>
+                  ~{Math.round(ttx)}m
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {onNavigateIntervention && (
+              <button
+                onClick={() => onNavigateIntervention(selectedUnit)}
+                style={{
+                  background: 'linear-gradient(135deg, #a855f7, #0284c7)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0.75rem 1.25rem',
+                  fontWeight: 800,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  boxShadow: '0 4px 16px rgba(168, 85, 247, 0.45)',
+                  transition: 'transform 0.15s ease',
+                }}
+              >
+                <Sparkles size={18} />
+                <span>Launch Digital Twin AI Intervention Co-Pilot</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 

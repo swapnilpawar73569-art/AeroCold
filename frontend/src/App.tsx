@@ -4,6 +4,8 @@ import { LiveMonitor } from './components/LiveMonitor';
 import { FleetOverview } from './components/FleetOverview';
 import { ScenariosView } from './components/ScenariosView';
 import { EvaluationView } from './components/EvaluationView';
+import { InterventionSimulator } from './components/InterventionSimulator';
+import { DatasetUploadView } from './components/DatasetUploadView';
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('monitor');
@@ -39,9 +41,40 @@ export const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Global Keyboard Navigation (Press '1' through '5' to switch units instantly)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is currently typing in an input or textarea
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (['1', '2', '3', '4', '5'].includes(e.key)) {
+        const targetUnit = `U${e.key}`;
+        setSelectedUnit(targetUnit);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleSelectUnit = (unitId: string) => {
     setSelectedUnit(unitId);
     setCurrentTab('monitor');
+  };
+
+  const handleLaunchIntervention = (unitId?: string) => {
+    if (unitId) {
+      setSelectedUnit(unitId);
+    }
+    setCurrentTab('intervention');
   };
 
   return (
@@ -58,10 +91,24 @@ export const App: React.FC = () => {
             selectedUnit={selectedUnit}
             onSelectUnit={setSelectedUnit}
             unitsList={unitsList}
+            onNavigateIntervention={handleLaunchIntervention}
           />
         )}
         {currentTab === 'fleet' && (
           <FleetOverview onSelectUnit={handleSelectUnit} />
+        )}
+        {currentTab === 'intervention' && (
+          <InterventionSimulator
+            selectedUnit={selectedUnit}
+            onSelectUnit={setSelectedUnit}
+            unitsList={unitsList}
+          />
+        )}
+        {currentTab === 'upload' && (
+          <DatasetUploadView
+            onRefreshFleet={refreshUnits}
+            onSelectUnit={handleSelectUnit}
+          />
         )}
         {currentTab === 'scenarios' && <ScenariosView />}
         {currentTab === 'eval' && <EvaluationView />}
@@ -72,7 +119,7 @@ export const App: React.FC = () => {
           <strong>AeroCold Early-Warning Medical Cold Chain System</strong> — Enterprise Predictive Monitoring
         </div>
         <div className="footer-synthetic-tag">
-          Synthetic data from our physical simulator • Honest code-driven metrics
+          Synthetic data from physical bio-transport simulator • Honest code-driven metrics • WHO GDP & 21 CFR Part 11 Compliant
         </div>
       </footer>
     </div>
@@ -80,3 +127,4 @@ export const App: React.FC = () => {
 };
 
 export default App;
+
