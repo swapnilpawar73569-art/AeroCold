@@ -268,7 +268,7 @@ export const ScenariosView: React.FC = () => {
         )}
       </div>
 
-      {/* Jury Deep Dive Callout */}
+      {/* Technical Architecture Callout */}
       <div
         className="glass-panel"
         style={{

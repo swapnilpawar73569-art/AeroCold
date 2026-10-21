@@ -18,7 +18,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onTabChange, serverC
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
               <h1 className="brand-title">AeroCold</h1>
-              <span className="brand-badge">Round 2 Ready</span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               Early-Warning Medical Cold Chain (2-8°C)

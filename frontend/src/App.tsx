@@ -69,7 +69,7 @@ export const App: React.FC = () => {
 
       <footer className="app-footer">
         <div>
-          <strong>AeroCold Early-Warning Medical Cold Chain System</strong> — Built for Hackathon Round 2 Evaluation
+          <strong>AeroCold Early-Warning Medical Cold Chain System</strong> — Enterprise Predictive Monitoring
         </div>
         <div className="footer-synthetic-tag">
           Synthetic data from our physical simulator • Honest code-driven metrics

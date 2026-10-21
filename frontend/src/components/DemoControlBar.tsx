@@ -20,7 +20,7 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
 
   const handleStreamScenario = async (scenario: 'u1' | 'u2' | 'both') => {
     setIsStreaming(true);
-    const label = scenario === 'u1' ? 'U1 Door-Open' : scenario === 'u2' ? 'U2 Cooling-Failure' : 'Jury Test Stream (U1 + U2)';
+    const label = scenario === 'u1' ? 'U1 Door-Open' : scenario === 'u2' ? 'U2 Cooling-Failure' : 'Benchmark Stream (U1 + U2)';
     setStreamStatus(`Streaming ${label}...`);
 
     try {
@@ -115,7 +115,7 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
             </span>
           ) : (
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              1-click test jury scenarios directly from browser:
+              Simulate cold chain thermal scenarios directly from browser:
             </span>
           )}
         </div>
@@ -186,7 +186,7 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
             }}
           >
             <Play size={13} fill="#ffffff" />
-            Run Full Jury Test
+            Run Full Stream (U1 + U2)
           </button>
 
           <button
