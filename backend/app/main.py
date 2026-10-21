@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Set
 import pandas as pd
+import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -173,11 +174,43 @@ async def api_ingest(payload: IngestRequest):
     return {"status": "ok", "processed": len(scored), "readings": scored}
 
 
+UNIT_METADATA = {
+    "U1": {
+        "payload": "Comirnaty mRNA Vaccine (Lot #VAX-8820)",
+        "location": "Cold Vault Alpha • Geneva Distribution Hub",
+        "battery_pct": 98,
+        "setpoint_c": "3.5°C",
+    },
+    "U2": {
+        "payload": "Insulin Glargine & Erythropoietin (Lot #MED-4091)",
+        "location": "Aviation Cargo Container Pod 04 • In Transit (LX-18)",
+        "battery_pct": 87,
+        "setpoint_c": "4.0°C",
+    },
+    "U3": {
+        "payload": "Pediatric Hepatitis B Biologics (Lot #PED-1102)",
+        "location": "Autonomous Drone Carrier 02 • Final Mile",
+        "battery_pct": 92,
+        "setpoint_c": "3.8°C",
+    },
+}
+
 # 4. Units Fleet Overview
 @app.get("/api/units")
 def api_get_units():
     units = get_all_units_summary()
-    return {"units": units}
+    enriched = []
+    for u in units:
+        u_dict = dict(u)
+        meta = UNIT_METADATA.get(u_dict["unit_id"], {
+            "payload": f"Medical Biologicals (Unit {u_dict['unit_id']})",
+            "location": "Hospital Central Reserve Bay",
+            "battery_pct": 95,
+            "setpoint_c": "4.0°C",
+        })
+        u_dict.update(meta)
+        enriched.append(u_dict)
+    return {"units": enriched}
 
 
 # 5. Unit Latest Reading
@@ -186,12 +219,28 @@ def api_get_unit_latest(unit_id: str):
     latest = get_latest_reading_for_unit(unit_id)
     if not latest:
         raise HTTPException(status_code=404, detail=f"Unit {unit_id} not found")
-    if latest.get("top_factors") and isinstance(latest["top_factors"], str):
+    
+    clean_latest = {}
+    for k, v in latest.items():
+        if isinstance(v, float) and (np.isnan(v) or np.isinf(v)):
+            clean_latest[k] = None
+        else:
+            clean_latest[k] = v
+
+    if clean_latest.get("top_factors") and isinstance(clean_latest["top_factors"], str):
         try:
-            latest["top_factors"] = json.loads(latest["top_factors"])
+            clean_latest["top_factors"] = json.loads(clean_latest["top_factors"])
         except Exception:
-            latest["top_factors"] = []
-    return latest
+            clean_latest["top_factors"] = []
+            
+    meta = UNIT_METADATA.get(unit_id, {
+        "payload": f"Medical Biologicals (Unit {unit_id})",
+        "location": "Hospital Central Reserve Bay",
+        "battery_pct": 95,
+        "setpoint_c": "4.0°C",
+    })
+    clean_latest.update(meta)
+    return clean_latest
 
 
 # 6. Unit History
@@ -200,15 +249,26 @@ def api_get_unit_history(unit_id: str, minutes: int = Query(default=120, ge=1, l
     latest = get_latest_reading_for_unit(unit_id)
     if not latest:
         return {"unit_id": unit_id, "readings": []}
+        
     history_df = get_unit_history(unit_id, up_to_ts=latest["ts"], max_minutes=minutes)
     records = history_df.to_dict(orient="records")
+    clean_records = []
+    
     for r in records:
-        if r.get("top_factors") and isinstance(r["top_factors"], str):
+        clean_row = {}
+        for k, v in r.items():
+            if isinstance(v, float) and (np.isnan(v) or np.isinf(v)):
+                clean_row[k] = None
+            else:
+                clean_row[k] = v
+        if clean_row.get("top_factors") and isinstance(clean_row["top_factors"], str):
             try:
-                r["top_factors"] = json.loads(r["top_factors"])
+                clean_row["top_factors"] = json.loads(clean_row["top_factors"])
             except Exception:
-                r["top_factors"] = []
-    return {"unit_id": unit_id, "readings": records}
+                clean_row["top_factors"] = []
+        clean_records.append(clean_row)
+        
+    return {"unit_id": unit_id, "readings": clean_records}
 
 
 # 7. Evaluation Results
@@ -289,3 +349,87 @@ def api_get_scenarios():
             "data": score_trace(fail_df, 60),
         },
     }
+
+
+# 9. Interactive Demo Control Endpoints
+class ManualInjectRequest(BaseModel):
+    unit_id: str
+    storage_c: float
+    ambient_c: float = 30.0
+    door: int = 0
+    cooling: int = 1
+    ts: int = 0
+
+
+@app.post("/api/demo/inject")
+async def api_demo_inject(req: ManualInjectRequest):
+    import time
+    actual_ts = req.ts if req.ts > 0 else int(time.time())
+    scored = score_reading(
+        unit_id=req.unit_id,
+        ts=actual_ts,
+        storage_c=req.storage_c,
+        ambient_c=req.ambient_c,
+        door=req.door,
+        cooling=req.cooling,
+    )
+    await broadcast_reading(scored)
+    return scored
+
+
+@app.post("/api/demo/stream-sample")
+async def api_demo_stream_sample(scenario: str = Query(default="both")):
+    """
+    Triggers simulated jury stream directly from the web interface:
+    - 'u1': Door open recovery sequence
+    - 'u2': Compressor failure excursion sequence
+    - 'both': Runs U1 then U2
+    """
+    import asyncio
+    from backend.tools.stream_samples import SAMPLE_U1_DOOR_OPEN, SAMPLE_U2_COOLING_FAILURE
+
+    lines = []
+    if scenario == "u1":
+        lines = SAMPLE_U1_DOOR_OPEN
+    elif scenario == "u2":
+        lines = SAMPLE_U2_COOLING_FAILURE
+    else:
+        lines = SAMPLE_U1_DOOR_OPEN + SAMPLE_U2_COOLING_FAILURE
+
+    scored_list = []
+    for line in lines:
+        results = process_raw_line_stream(line)
+        for r in results:
+            scored_list.append(r)
+            await broadcast_reading(r)
+        await asyncio.sleep(0.4)
+
+    return {"status": "success", "streamed": len(scored_list), "readings": scored_list}
+
+
+@app.post("/api/demo/reset-db")
+async def api_demo_reset_db():
+    """
+    Resets the SQLite database and reseeds baseline test units U1 and U2.
+    Allows continuous clean demo resets during presentations.
+    """
+    from backend.app.config import DB_PATH
+    from backend.app.db import _DB_LOCK
+
+    with _DB_LOCK:
+        conn = get_connection()
+        try:
+            with conn:
+                conn.execute("DELETE FROM readings;")
+        finally:
+            conn.close()
+
+    # Re-seed baseline demo readings
+    from backend.tools.stream_samples import SAMPLE_U1_DOOR_OPEN, SAMPLE_U2_COOLING_FAILURE
+    for line in SAMPLE_U1_DOOR_OPEN:
+        process_raw_line_stream(line)
+    for line in SAMPLE_U2_COOLING_FAILURE:
+        process_raw_line_stream(line)
+
+    return {"status": "database_reset_and_reseeded", "units": ["U1", "U2"]}
+
