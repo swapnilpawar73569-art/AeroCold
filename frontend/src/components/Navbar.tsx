@@ -5,7 +5,6 @@ import {
   BarChart3,
   Snowflake,
   Sparkles,
-  UploadCloud,
   Layers,
 } from 'lucide-react';
 
@@ -69,34 +68,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onTabChange, serverC
           <button
             className={`nav-tab-btn ${currentTab === 'intervention' ? 'active' : ''}`}
             onClick={() => onTabChange('intervention')}
-            style={{
-              position: 'relative',
-              borderColor: currentTab === 'intervention' ? '#38bdf8' : 'rgba(168, 85, 247, 0.4)',
-            }}
           >
-            <Sparkles size={15} color="#c084fc" />
-            <span>Intervention Co-Pilot</span>
-            <span
-              style={{
-                fontSize: '0.6rem',
-                background: 'linear-gradient(135deg, #a855f7, #0284c7)',
-                color: '#fff',
-                padding: '0.1rem 0.35rem',
-                borderRadius: '4px',
-                fontWeight: 800,
-                marginLeft: '0.35rem',
-              }}
-            >
-              WHAT-IF
-            </span>
-          </button>
-
-          <button
-            className={`nav-tab-btn ${currentTab === 'upload' ? 'active' : ''}`}
-            onClick={() => onTabChange('upload')}
-          >
-            <UploadCloud size={15} />
-            Dataset Uploader
+            <Sparkles size={15} color="#38bdf8" />
+            Action Co-Pilot
           </button>
 
           <button

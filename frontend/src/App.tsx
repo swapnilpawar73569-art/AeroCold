@@ -5,7 +5,6 @@ import { FleetOverview } from './components/FleetOverview';
 import { ScenariosView } from './components/ScenariosView';
 import { EvaluationView } from './components/EvaluationView';
 import { InterventionSimulator } from './components/InterventionSimulator';
-import { DatasetUploadView } from './components/DatasetUploadView';
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('monitor');
@@ -102,12 +101,6 @@ export const App: React.FC = () => {
             selectedUnit={selectedUnit}
             onSelectUnit={setSelectedUnit}
             unitsList={unitsList}
-          />
-        )}
-        {currentTab === 'upload' && (
-          <DatasetUploadView
-            onRefreshFleet={refreshUnits}
-            onSelectUnit={handleSelectUnit}
           />
         )}
         {currentTab === 'scenarios' && <ScenariosView />}
