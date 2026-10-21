@@ -1,0 +1,43 @@
+{
+  "model_version": "1.0.0",
+  "training_date": "2026-10-21 10:31:01",
+  "data_seed": 42,
+  "feature_names": [
+    "storage_c",
+    "ambient_c",
+    "dist_to_8",
+    "dist_to_2",
+    "door",
+    "cooling",
+    "slope_1m",
+    "slope_3m",
+    "slope_5m",
+    "slope_10m",
+    "accel",
+    "mean_5m",
+    "std_5m",
+    "max_15m",
+    "door_open_count_10m",
+    "minutes_since_door_close",
+    "minutes_since_door_open",
+    "cooling_on_frac_10m",
+    "minutes_since_cooling_off",
+    "ambient_minus_storage"
+  ],
+  "thresholds": {
+    "low": 0.2,
+    "medium": 0.527
+  },
+  "k_persistence": 3,
+  "safety_rules": {
+    "recovering_cap": 0.1,
+    "door_open_cap": 0.45,
+    "cooling_off_ttx30_floor": 0.75,
+    "cooling_off_ttx60_floor": 0.45
+  },
+  "validation_metrics": {
+    "roc_auc": 0.9565,
+    "medium_threshold": 0.2,
+    "high_threshold": 0.527
+  }
+}

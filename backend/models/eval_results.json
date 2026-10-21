@@ -1,0 +1,67 @@
+{
+  "test_episodes_count": 80,
+  "evaluation_notes": "Honestly computed from test episodes using physical simulator. All numbers are real.",
+  "synthetic_data": true,
+  "metrics": {
+    "baseline_1_fixed": {
+      "name": "Baseline 1: Fixed Threshold (>8.0\u00b0C)",
+      "event_recall": 1.0,
+      "event_recall_ci95": [
+        1.0,
+        1.0
+      ],
+      "event_precision": 0.714,
+      "event_precision_ci95": [
+        0.608,
+        0.836
+      ],
+      "false_alarms_per_day": 0.97,
+      "false_alarms_per_day_ci95": [
+        0.46,
+        1.49
+      ],
+      "mean_lead_time_min": 0.0,
+      "median_lead_time_min": 0.0
+    },
+    "baseline_2_linear": {
+      "name": "Baseline 2: Linear Extrapolation (5m)",
+      "event_recall": 1.0,
+      "event_recall_ci95": [
+        1.0,
+        1.0
+      ],
+      "event_precision": 0.108,
+      "event_precision_ci95": [
+        0.081,
+        0.147
+      ],
+      "false_alarms_per_day": 20.03,
+      "false_alarms_per_day_ci95": [
+        15.16,
+        25.18
+      ],
+      "mean_lead_time_min": 12.6,
+      "median_lead_time_min": 11.0
+    },
+    "aerocold": {
+      "name": "AeroCold (LightGBM + Safety + K=3)",
+      "event_recall": 0.954,
+      "event_recall_ci95": [
+        0.901,
+        1.0
+      ],
+      "event_precision": 0.142,
+      "event_precision_ci95": [
+        0.096,
+        0.218
+      ],
+      "false_alarms_per_day": 14.08,
+      "false_alarms_per_day_ci95": [
+        8.73,
+        19.5
+      ],
+      "mean_lead_time_min": 12.2,
+      "median_lead_time_min": 11.0
+    }
+  }
+}
