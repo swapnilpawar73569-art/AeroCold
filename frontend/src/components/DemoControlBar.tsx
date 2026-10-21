@@ -1,5 +1,18 @@
-import React, { useState } from 'react';
-import { Play, AlertTriangle, RotateCcw, Sliders, CheckCircle, Radio } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Play,
+  AlertTriangle,
+  RotateCcw,
+  Sliders,
+  CheckCircle,
+  Radio,
+  DoorOpen,
+  DoorClosed,
+  Zap,
+  ZapOff,
+  Activity,
+  Flame,
+} from 'lucide-react';
 
 interface DemoControlBarProps {
   onRefresh: () => void;
@@ -10,6 +23,7 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamStatus, setStreamStatus] = useState<string>('');
   const [showManualModal, setShowManualModal] = useState(false);
+  const [autoSimulate, setAutoSimulate] = useState(false);
 
   // Manual injection form state
   const [injectUnit, setInjectUnit] = useState(selectedUnit);
@@ -18,9 +32,45 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
   const [injectDoor, setInjectDoor] = useState<number>(0);
   const [injectCooling, setInjectCooling] = useState<number>(1);
 
-  const handleStreamScenario = async (scenario: 'u1' | 'u2' | 'both') => {
+  const autoSimTimerRef = useRef<any>(null);
+
+  // Auto-simulate ticker loop
+  useEffect(() => {
+    if (autoSimulate) {
+      autoSimTimerRef.current = setInterval(async () => {
+        try {
+          await fetch(`http://localhost:8000/api/demo/tick-live?unit_id=${selectedUnit}`, {
+            method: 'POST',
+          });
+          onRefresh();
+        } catch (e) {
+          console.error('Tick error:', e);
+        }
+      }, 2500);
+    } else {
+      if (autoSimTimerRef.current) {
+        clearInterval(autoSimTimerRef.current);
+        autoSimTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (autoSimTimerRef.current) {
+        clearInterval(autoSimTimerRef.current);
+      }
+    };
+  }, [autoSimulate, selectedUnit, onRefresh]);
+
+  const handleStreamScenario = async (scenario: 'u1' | 'u2' | 'u3' | 'u4' | 'u5' | 'all') => {
     setIsStreaming(true);
-    const label = scenario === 'u1' ? 'U1 Door-Open' : scenario === 'u2' ? 'U2 Cooling-Failure' : 'Benchmark Stream (U1 + U2)';
+    const labels: Record<string, string> = {
+      u1: 'U1 Door-Open Recovery',
+      u2: 'U2 Cooling Failure (K=3)',
+      u3: 'U3 Thermal Creep (Warning Stage)',
+      u4: 'U4 Nominal Thermostat Cycle',
+      u5: 'U5 Sensor Glitch Filtered',
+      all: 'Full Fleet Stream (U1 – U5)',
+    };
+    const label = labels[scenario] || 'Fleet Stream';
     setStreamStatus(`Streaming ${label}...`);
 
     try {
@@ -28,7 +78,7 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
         method: 'POST',
       });
       if (res.ok) {
-        setStreamStatus(`${label} completed!`);
+        setStreamStatus(`${label} streamed successfully!`);
         setTimeout(() => setStreamStatus(''), 3000);
         onRefresh();
       }
@@ -39,11 +89,26 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
     }
   };
 
+  const handleTriggerEvent = async (eventType: string) => {
+    try {
+      setStreamStatus(`Injecting event: ${eventType} on ${selectedUnit}...`);
+      await fetch(
+        `http://localhost:8000/api/demo/event?unit_id=${selectedUnit}&event_type=${eventType}`,
+        { method: 'POST' }
+      );
+      setStreamStatus(`Event applied: ${eventType}`);
+      setTimeout(() => setStreamStatus(''), 2500);
+      onRefresh();
+    } catch (e) {
+      console.error('Event inject error:', e);
+    }
+  };
+
   const handleResetDB = async () => {
-    if (confirm('Reset database to clean baseline demo readings?')) {
+    if (confirm('Reset database to clean baseline demo readings for U1 through U5?')) {
       try {
         await fetch('http://localhost:8000/api/demo/reset-db', { method: 'POST' });
-        setStreamStatus('Database reset & re-seeded!');
+        setStreamStatus('Fleet reset & reseeded to baseline!');
         setTimeout(() => setStreamStatus(''), 2500);
         onRefresh();
       } catch (err) {
@@ -86,7 +151,7 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '1rem',
-          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.7))',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.8))',
           border: '1px solid rgba(2, 132, 199, 0.3)',
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
         }}
@@ -98,29 +163,77 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
               alignItems: 'center',
               gap: '0.4rem',
               padding: '0.3rem 0.6rem',
-              background: 'rgba(2, 132, 199, 0.15)',
+              background: autoSimulate ? 'rgba(16, 185, 129, 0.2)' : 'rgba(2, 132, 199, 0.15)',
               borderRadius: '6px',
-              border: '1px solid rgba(2, 132, 199, 0.4)',
+              border: autoSimulate
+                ? '1px solid rgba(16, 185, 129, 0.5)'
+                : '1px solid rgba(2, 132, 199, 0.4)',
             }}
           >
-            <Radio size={16} color="#38bdf8" className={isStreaming ? 'pulse-icon' : ''} />
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#38bdf8', letterSpacing: '0.04em' }}>
-              LIVE DEMO CONTROLLER
+            <Radio
+              size={16}
+              color={autoSimulate ? '#10b981' : '#38bdf8'}
+              className={autoSimulate || isStreaming ? 'pulse-icon' : ''}
+            />
+            <span
+              style={{
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                color: autoSimulate ? '#10b981' : '#38bdf8',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {autoSimulate ? 'LIVE STREAM ACTIVE' : 'LIVE DEMO CONTROLLER'}
             </span>
           </div>
 
           {streamStatus ? (
-            <span style={{ fontSize: '0.825rem', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <span
+              style={{
+                fontSize: '0.825rem',
+                color: '#10b981',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+              }}
+            >
               <CheckCircle size={14} /> {streamStatus}
             </span>
           ) : (
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Simulate cold chain thermal scenarios directly from browser:
+              Target: <strong style={{ color: '#38bdf8' }}>{selectedUnit}</strong> • 1-Click
+              Demonstrators:
             </span>
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+        {/* Action Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* Toggle Live Auto-Simulator */}
+          <button
+            onClick={() => setAutoSimulate(!autoSimulate)}
+            style={{
+              background: autoSimulate ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+              color: autoSimulate ? '#10b981' : 'var(--text-main)',
+              border: autoSimulate ? '1px solid #10b981' : '1px solid var(--border-light)',
+              padding: '0.45rem 0.8rem',
+              borderRadius: '6px',
+              fontSize: '0.825rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              transition: 'all 0.15s ease',
+            }}
+            title="Automatically emits live sensor ticks every 2.5 seconds to show dynamic movement"
+          >
+            <Activity size={13} color={autoSimulate ? '#10b981' : '#94a3b8'} />
+            {autoSimulate ? 'Pause Auto-Stream' : '▶ Auto-Stream Live'}
+          </button>
+
+          {/* Scenarios U1 through U5 */}
           <button
             onClick={() => handleStreamScenario('u1')}
             disabled={isStreaming}
@@ -128,20 +241,19 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
               background: 'rgba(16, 185, 129, 0.15)',
               color: '#10b981',
               border: '1px solid rgba(16, 185, 129, 0.4)',
-              padding: '0.45rem 0.9rem',
+              padding: '0.45rem 0.75rem',
               borderRadius: '6px',
-              fontSize: '0.825rem',
+              fontSize: '0.8rem',
               fontWeight: 700,
               cursor: isStreaming ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
-              transition: 'all 0.15s ease',
+              gap: '0.3rem',
             }}
             title="Runs U1: Door opened then recovers, proving system avoids false alarms"
           >
-            <Play size={13} fill="#10b981" />
-            Stream U1 (Door Recovery)
+            <Play size={12} fill="#10b981" />
+            U1 (Door Recov)
           </button>
 
           <button
@@ -151,44 +263,173 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
               background: 'rgba(239, 68, 68, 0.15)',
               color: '#ef4444',
               border: '1px solid rgba(239, 68, 68, 0.4)',
-              padding: '0.45rem 0.9rem',
+              padding: '0.45rem 0.75rem',
               borderRadius: '6px',
-              fontSize: '0.825rem',
+              fontSize: '0.8rem',
               fontWeight: 700,
               cursor: isStreaming ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
-              transition: 'all 0.15s ease',
+              gap: '0.3rem',
             }}
             title="Runs U2: Cooling failure escalates to High risk before 8°C"
           >
-            <AlertTriangle size={13} color="#ef4444" />
-            Stream U2 (Cooling Failure)
+            <AlertTriangle size={12} color="#ef4444" />
+            U2 (Cooling Fail)
           </button>
 
           <button
-            onClick={() => handleStreamScenario('both')}
+            onClick={() => handleStreamScenario('u3')}
+            disabled={isStreaming}
+            style={{
+              background: 'rgba(245, 158, 11, 0.15)',
+              color: '#f59e0b',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              padding: '0.45rem 0.75rem',
+              borderRadius: '6px',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              cursor: isStreaming ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+            }}
+            title="Runs U3: Thermal creep heatwave (Medium Warning Stage)"
+          >
+            <Flame size={12} color="#f59e0b" />
+            U3 (Warning Creep)
+          </button>
+
+          <button
+            onClick={() => handleStreamScenario('u4')}
+            disabled={isStreaming}
+            style={{
+              background: 'rgba(56, 189, 248, 0.15)',
+              color: '#38bdf8',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              padding: '0.45rem 0.75rem',
+              borderRadius: '6px',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              cursor: isStreaming ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+            }}
+            title="Runs U4: Nominal stable cycling"
+          >
+            <Play size={12} fill="#38bdf8" />
+            U4 (Nominal)
+          </button>
+
+          <button
+            onClick={() => handleStreamScenario('u5')}
+            disabled={isStreaming}
+            style={{
+              background: 'rgba(168, 85, 247, 0.15)',
+              color: '#c084fc',
+              border: '1px solid rgba(168, 85, 247, 0.4)',
+              padding: '0.45rem 0.75rem',
+              borderRadius: '6px',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              cursor: isStreaming ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+            }}
+            title="Runs U5: Glitch spike filtered by causal median filter"
+          >
+            <Activity size={12} color="#c084fc" />
+            U5 (Glitch Filter)
+          </button>
+
+          <button
+            onClick={() => handleStreamScenario('all')}
             disabled={isStreaming}
             style={{
               background: 'var(--color-primary)',
               color: '#ffffff',
               border: 'none',
-              padding: '0.45rem 0.9rem',
+              padding: '0.45rem 0.85rem',
               borderRadius: '6px',
-              fontSize: '0.825rem',
+              fontSize: '0.8rem',
               fontWeight: 700,
               cursor: isStreaming ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.4rem',
+              gap: '0.35rem',
               boxShadow: '0 2px 10px rgba(2, 132, 199, 0.3)',
             }}
           >
-            <Play size={13} fill="#ffffff" />
-            Run Full Stream (U1 + U2)
+            <Play size={12} fill="#ffffff" />
+            Stream All (U1–U5)
           </button>
 
+          {/* Quick Event Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', borderLeft: '1px solid var(--border-card)', paddingLeft: '0.5rem' }}>
+            <button
+              onClick={() => handleTriggerEvent('door_open')}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: 'var(--text-main)',
+                border: '1px solid var(--border-card)',
+                padding: '0.4rem 0.6rem',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+              }}
+              title={`Simulate opening door on ${selectedUnit}`}
+            >
+              <DoorOpen size={12} color="#f59e0b" />
+              Open Door
+            </button>
+
+            <button
+              onClick={() => handleTriggerEvent('cooling_cut')}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: 'var(--text-main)',
+                border: '1px solid var(--border-card)',
+                padding: '0.4rem 0.6rem',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+              }}
+              title={`Simulate cooling power cut on ${selectedUnit}`}
+            >
+              <ZapOff size={12} color="#ef4444" />
+              Cut Power
+            </button>
+
+            <button
+              onClick={() => handleTriggerEvent('cooling_restore')}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: 'var(--text-main)',
+                border: '1px solid var(--border-card)',
+                padding: '0.4rem 0.6rem',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+              }}
+              title={`Simulate cooling power restore on ${selectedUnit}`}
+            >
+              <Zap size={12} color="#10b981" />
+              Cool
+            </button>
+          </div>
+
+          {/* Custom & Reset */}
           <button
             onClick={() => {
               setInjectUnit(selectedUnit);
@@ -198,18 +439,18 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
               background: 'rgba(255, 255, 255, 0.08)',
               color: 'var(--text-main)',
               border: '1px solid var(--border-light)',
-              padding: '0.45rem 0.8rem',
+              padding: '0.45rem 0.7rem',
               borderRadius: '6px',
-              fontSize: '0.825rem',
+              fontSize: '0.8rem',
               fontWeight: 600,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.35rem',
+              gap: '0.3rem',
             }}
           >
-            <Sliders size={14} />
-            Inject Custom
+            <Sliders size={13} />
+            Custom
           </button>
 
           <button
@@ -218,9 +459,9 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
               background: 'rgba(255, 255, 255, 0.05)',
               color: 'var(--text-dim)',
               border: '1px solid var(--border-card)',
-              padding: '0.45rem 0.7rem',
+              padding: '0.45rem 0.65rem',
               borderRadius: '6px',
-              fontSize: '0.825rem',
+              fontSize: '0.8rem',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -228,7 +469,7 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
             }}
             title="Reset database to fresh state"
           >
-            <RotateCcw size={13} />
+            <RotateCcw size={12} />
             Reset
           </button>
         </div>
@@ -277,10 +518,9 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
                   Target Storage Unit
                 </label>
-                <input
-                  type="text"
+                <select
                   value={injectUnit}
-                  onChange={(e) => setInjectUnit(e.target.value.toUpperCase())}
+                  onChange={(e) => setInjectUnit(e.target.value)}
                   style={{
                     width: '100%',
                     padding: '0.6rem',
@@ -291,9 +531,15 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
                     marginTop: '0.25rem',
                     fontFamily: 'var(--font-mono)',
                     fontWeight: 700,
+                    cursor: 'pointer',
                   }}
-                  required
-                />
+                >
+                  <option value="U1">U1 - Comirnaty mRNA Vaccine</option>
+                  <option value="U2">U2 - Insulin Glargine & EPO</option>
+                  <option value="U3">U3 - Pediatric Hep B Biologics</option>
+                  <option value="U4">U4 - Meningococcal Conjugate</option>
+                  <option value="U5">U5 - Blood Plasma Vault</option>
+                </select>
               </div>
 
               <div>
@@ -352,21 +598,23 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
                     checked={injectCooling === 1}
                     onChange={(e) => setInjectCooling(e.target.checked ? 1 : 0)}
                   />
-                  <span>Cooling Compressor On (1)</span>
+                  <span>Cooling Active (1)</span>
                 </label>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
                 <button
                   type="button"
                   onClick={() => setShowManualModal(false)}
                   style={{
+                    flex: 1,
+                    padding: '0.65rem',
                     background: 'transparent',
                     border: '1px solid var(--border-card)',
-                    color: 'var(--text-muted)',
-                    padding: '0.5rem 1rem',
                     borderRadius: '8px',
+                    color: 'var(--text-muted)',
                     cursor: 'pointer',
+                    fontWeight: 600,
                   }}
                 >
                   Cancel
@@ -374,13 +622,14 @@ export const DemoControlBar: React.FC<DemoControlBarProps> = ({ onRefresh, selec
                 <button
                   type="submit"
                   style={{
+                    flex: 1,
+                    padding: '0.65rem',
                     background: 'var(--color-primary)',
                     border: 'none',
-                    color: '#fff',
-                    padding: '0.5rem 1.25rem',
                     borderRadius: '8px',
-                    fontWeight: 700,
+                    color: '#fff',
                     cursor: 'pointer',
+                    fontWeight: 700,
                   }}
                 >
                   Inject Telemetry

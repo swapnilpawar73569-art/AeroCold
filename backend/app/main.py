@@ -54,8 +54,22 @@ async def lifespan(app: FastAPI):
     # Startup: initialize SQLite and load ML models
     init_db()
     get_model_and_config()
+    
+    # Ensure all 5 units U1 to U5 are seeded
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(DISTINCT unit_id) FROM readings")
+        count = cur.fetchone()[0]
+        if count < 5:
+            from backend.tools.stream_samples import ALL_UNITS_STREAM
+            for line in ALL_UNITS_STREAM:
+                process_raw_line_stream(line)
+    finally:
+        conn.close()
+
     print("=" * 60)
-    print("  AeroCold Monitoring Server Active")
+    print("  AeroCold Monitoring Server Active (Units U1..U5 Loaded)")
     print("  Ingest WebSocket: ws://localhost:8000/ws/ingest")
     print("  Live Stream WS:   ws://localhost:8000/ws/live")
     print("  REST API Docs:    http://localhost:8000/docs")
@@ -192,6 +206,18 @@ UNIT_METADATA = {
         "location": "Autonomous Drone Carrier 02 • Final Mile",
         "battery_pct": 92,
         "setpoint_c": "3.8°C",
+    },
+    "U4": {
+        "payload": "Meningococcal Conjugate Vaccines (Lot #MEN-3310)",
+        "location": "Main Hospital Pharmacy Vault • Zurich Central",
+        "battery_pct": 99,
+        "setpoint_c": "4.0°C",
+    },
+    "U5": {
+        "payload": "Cryo-Precipitated Blood Plasma (Lot #PLAS-9004)",
+        "location": "Emergency Blood Bank Refrigerator Bay 03",
+        "battery_pct": 94,
+        "setpoint_c": "4.0°C",
     },
 }
 
@@ -378,23 +404,38 @@ async def api_demo_inject(req: ManualInjectRequest):
 
 
 @app.post("/api/demo/stream-sample")
-async def api_demo_stream_sample(scenario: str = Query(default="both")):
+async def api_demo_stream_sample(scenario: str = Query(default="all")):
     """
-    Triggers simulated jury stream directly from the web interface:
+    Triggers simulated telemetry stream directly from the web interface:
     - 'u1': Door open recovery sequence
     - 'u2': Compressor failure excursion sequence
-    - 'both': Runs U1 then U2
+    - 'u3': Power cut / heat wave exposure
+    - 'u4': Optimal thermostat cycling
+    - 'u5': Sensor glitch spike filtering
+    - 'all' or 'both': Streams all units U1 to U5
     """
     import asyncio
-    from backend.tools.stream_samples import SAMPLE_U1_DOOR_OPEN, SAMPLE_U2_COOLING_FAILURE
+    from backend.tools.stream_samples import (
+        SAMPLE_U1_DOOR_OPEN,
+        SAMPLE_U2_COOLING_FAILURE,
+        SAMPLE_U3_POWER_CUT,
+        SAMPLE_U4_NOMINAL_CYCLE,
+        SAMPLE_U5_SENSOR_GLITCH,
+        ALL_UNITS_STREAM,
+    )
 
-    lines = []
     if scenario == "u1":
         lines = SAMPLE_U1_DOOR_OPEN
     elif scenario == "u2":
         lines = SAMPLE_U2_COOLING_FAILURE
+    elif scenario == "u3":
+        lines = SAMPLE_U3_POWER_CUT
+    elif scenario == "u4":
+        lines = SAMPLE_U4_NOMINAL_CYCLE
+    elif scenario == "u5":
+        lines = SAMPLE_U5_SENSOR_GLITCH
     else:
-        lines = SAMPLE_U1_DOOR_OPEN + SAMPLE_U2_COOLING_FAILURE
+        lines = ALL_UNITS_STREAM
 
     scored_list = []
     for line in lines:
@@ -402,7 +443,7 @@ async def api_demo_stream_sample(scenario: str = Query(default="both")):
         for r in results:
             scored_list.append(r)
             await broadcast_reading(r)
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(0.25)
 
     return {"status": "success", "streamed": len(scored_list), "readings": scored_list}
 
@@ -410,7 +451,7 @@ async def api_demo_stream_sample(scenario: str = Query(default="both")):
 @app.post("/api/demo/reset-db")
 async def api_demo_reset_db():
     """
-    Resets the SQLite database and reseeds baseline test units U1 and U2.
+    Resets the SQLite database and reseeds all units U1 through U5.
     Allows continuous clean demo resets during presentations.
     """
     from backend.app.config import DB_PATH
@@ -424,12 +465,99 @@ async def api_demo_reset_db():
         finally:
             conn.close()
 
-    # Re-seed baseline demo readings
-    from backend.tools.stream_samples import SAMPLE_U1_DOOR_OPEN, SAMPLE_U2_COOLING_FAILURE
-    for line in SAMPLE_U1_DOOR_OPEN:
-        process_raw_line_stream(line)
-    for line in SAMPLE_U2_COOLING_FAILURE:
+    # Re-seed baseline demo readings across all 5 units
+    from backend.tools.stream_samples import ALL_UNITS_STREAM
+    for line in ALL_UNITS_STREAM:
         process_raw_line_stream(line)
 
-    return {"status": "database_reset_and_reseeded", "units": ["U1", "U2"]}
+    return {"status": "database_reset_and_reseeded", "units": ["U1", "U2", "U3", "U4", "U5"]}
+
+
+@app.post("/api/demo/tick-live")
+async def api_demo_tick_live(unit_id: str = Query(default="U1")):
+    """
+    Simulates a live streaming tick for the specified unit.
+    Advances timestamp by 30 seconds and computes physics:
+    - If door open: temp rises by ~0.12°C
+    - If cooling ON: temp cools by ~0.05°C towards setpoint (3.8°C)
+    - If cooling OFF: temp warms by ~0.08°C towards ambient
+    Scores and broadcasts over WebSocket for instant live UI animation.
+    """
+    latest = get_latest_reading_for_unit(unit_id)
+    if latest:
+        next_ts = latest["ts"] + 30
+        curr_temp = latest["storage_c"]
+        ambient = latest["ambient_c"]
+        door = latest["door"]
+        cooling = latest["cooling"]
+    else:
+        import time
+        next_ts = int(time.time())
+        curr_temp = 4.2
+        ambient = 30.0
+        door = 0
+        cooling = 1
+
+    # Physics simulation for continuous live tick
+    if door == 1:
+        new_temp = round(curr_temp + 0.12, 2)
+    elif cooling == 1:
+        if curr_temp > 3.8:
+            new_temp = round(curr_temp - 0.05, 2)
+        else:
+            new_temp = round(curr_temp + 0.02, 2)
+    else:
+        new_temp = round(curr_temp + 0.08, 2)
+
+    scored = score_reading(
+        unit_id=unit_id,
+        ts=next_ts,
+        storage_c=new_temp,
+        ambient_c=ambient,
+        door=door,
+        cooling=cooling,
+    )
+    await broadcast_reading(scored)
+    return scored
+
+
+@app.post("/api/demo/event")
+async def api_demo_event(unit_id: str = Query(...), event_type: str = Query(...)):
+    """
+    Injects operational cold-chain events:
+    - 'door_open': Door opened, temperature jumps +0.6°C
+    - 'door_close': Door closed, compressor engages
+    - 'cooling_cut': Compressor power failure (cooling=0)
+    - 'cooling_restore': Compressor power restored (cooling=1)
+    - 'sensor_spike': Transient sensor electrical spike (+3.5°C)
+    """
+    latest = get_latest_reading_for_unit(unit_id)
+    next_ts = (latest["ts"] if latest else 1760000000) + 30
+    curr_temp = latest["storage_c"] if latest else 4.0
+    ambient = latest["ambient_c"] if latest else 30.0
+    door = latest["door"] if latest else 0
+    cooling = latest["cooling"] if latest else 1
+
+    if event_type == "door_open":
+        door = 1
+        curr_temp = round(curr_temp + 0.6, 2)
+    elif event_type == "door_close":
+        door = 0
+    elif event_type == "cooling_cut":
+        cooling = 0
+    elif event_type == "cooling_restore":
+        cooling = 1
+    elif event_type == "sensor_spike":
+        curr_temp = round(curr_temp + 3.5, 2)
+
+    scored = score_reading(
+        unit_id=unit_id,
+        ts=next_ts,
+        storage_c=curr_temp,
+        ambient_c=ambient,
+        door=door,
+        cooling=cooling,
+    )
+    await broadcast_reading(scored)
+    return scored
 

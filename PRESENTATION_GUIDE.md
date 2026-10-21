@@ -29,20 +29,35 @@ This guide is your complete presentation playbook: pitch script, live demo seque
 ### 3. The Live Demo (1:20 – 2:30)
 *(Switch to browser at `http://localhost:5173/`)*
 
-#### Demo Step 1: The Harmless Door-Open (Combating Alarm Fatigue)
-- **Action**: On the Live Controller bar, click **"Stream U1 (Door Recovery)"**.
+#### Demo Step 1: The Fleet Command Center (U1 through U5)
+- **Action**: Click on the **"Fleet Overview"** tab.
 - **Talking Point**:
-  > *"Watch Unit U1. A pharmacist opened the door to pull a vial. Temperature jumped from 6.4°C to 7.1°C. Notice what happens: AeroCold evaluates that cooling is active and the door was re-closed. The risk stays capped at Medium, and as the compressor recovers, it immediately falls back to **Low Risk (p = 0.013)**. The operator sees: 'Door was opened and is now closed; temperature is falling back to normal.' Zero nuisance alarms. No alarm fatigue."*
+  > *"Here is our live Fleet Command Center monitoring 5 diverse medical cold-storage nodes across clinics, drones, and cargo pods:  
+  > - **U1 (mRNA Vaccine)**: Normal recovery after restocking.  
+  > - **U2 (Insulin Glargine)**: Critical compressor loss in air cargo transit with an active emergency K=3 alarm.  
+  > - **U3 (Pediatric Hep B)**: Early warning stage (Medium Risk) on an autonomous drone under 36°C ambient heat.  
+  > - **U4 (Meningococcal Vaccine)**: Flawless nominal regulation (3.9°C).  
+  > - **U5 (Blood Plasma)**: Electrical sensor glitch cleanly filtered out with zero false alarms."*
 
-#### Demo Step 2: The Silent Cooling Failure (Early Warning Lead Time)
-- **Action**: Switch to Unit U2 (or click **"Stream U2 (Cooling Failure)"**).
+#### Demo Step 2: The Harmless Door-Open (Combating Alarm Fatigue)
+- **Action**: Click on Unit **U1** (or click **"U1 (Door Recov)"** on the top bar).
 - **Talking Point**:
-  > *"Now watch Unit U2. Here, the cooling compressor died silently. The chamber temperature is still at 7.1°C—well below the legal 8.0°C violation threshold. Traditional monitors are completely silent right now!*  
-  > *AeroCold's dial gauge immediately jumps into the **High Risk (75%)** red zone and triggers a persistent **K=3 alert**. It predicts the exact time to excursion: ~5 minutes remaining. Look at the TreeSHAP waterfall below: it tells the operator exactly why—'cooling compressor is OFF' and 'elevated 10-minute upward drift'. We just saved millions of dollars of medicine before a violation ever occurred."*
+  > *"Watch Unit U1. A pharmacist opened the door to pull a vial. Temperature jumped to 7.1°C. Notice what happens: AeroCold evaluates that cooling is active and the door was re-closed. The safety guardrail caps risk, and as the compressor recovers, it immediately falls back to **Low Risk (p = 0.011)**. The operator sees: 'Storage temperature is within safe nominal limits; door was opened and closed; temperature is falling back.' Zero nuisance alarms. No alarm fatigue."*
 
-#### Demo Step 3: Hardware Crash & Reboot Persistence
+#### Demo Step 3: The Early Warning Creep (Medium Risk Warning Stage)
+- **Action**: Switch to Unit **U3** (or click **"U3 (Warning Creep)"**).
 - **Talking Point**:
-  > *"Every single calculation is persisted directly into SQLite WAL mode. Even if this server crashes or power flickers, reloading the dashboard restores the exact state with zero in-memory drift."*
+  > *"Now look at Unit U3 on our medical drone carrier. It's at 5.6°C—well below the 8.0°C limit. But our calibrated LightGBM model detects a sustained 10-minute upward thermal drift under high ambient load (36°C). It moves into the **Medium Risk Warning Stage (p = 0.372)** with **~24 minutes advance warning**, allowing logistics dispatchers to reroute before medicine is compromised."*
+
+#### Demo Step 4: The Critical Cooling Failure (High Risk, K=3 Persistence)
+- **Action**: Switch to Unit **U2** (or click **"U2 (Cooling Fail)"**).
+- **Talking Point**:
+  > *"Now watch Unit U2. The cooling compressor died silently (cooling=0). Temperature is at 7.5°C. Traditional monitors have sounded no alarm! AeroCold immediately triggers **High Risk (75%)** and flags **K=3 Persistence Active**, projecting an excursion in ~6 minutes. Look at the TreeSHAP waterfall: it isolates 'compressor idle' and 'mean temperature elevated' as the exact drivers."*
+
+#### Demo Step 5: Live Streaming & Hardware Glitch Rejection
+- **Action**: Click **"▶ Auto-Stream Live"** on the Demo Controller bar.
+- **Talking Point**:
+  > *"Watch our live IoT stream ticking in real-time every 2.5 seconds: the gauge, charts, and factor attributions dynamically roll forward. And on Unit U5, when a dirty electrical pulse caused an isolated spike to 7.8°C, our causal 3-point median filter rejected the spike cleanly, maintaining green stability."*
 
 ---
 

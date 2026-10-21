@@ -8,7 +8,7 @@ import { EvaluationView } from './components/EvaluationView';
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<string>('monitor');
   const [selectedUnit, setSelectedUnit] = useState<string>('U1');
-  const [unitsList, setUnitsList] = useState<string[]>(['U1', 'U2']);
+  const [unitsList, setUnitsList] = useState<string[]>(['U1', 'U2', 'U3', 'U4', 'U5']);
   const [serverConnected, setServerConnected] = useState<boolean>(true);
 
   // Load known units from API
